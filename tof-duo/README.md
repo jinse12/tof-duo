@@ -21,11 +21,13 @@ VL53L8CX 8x8 ToF 센서 3개(보드 3대)의 값을 **MQTT 브로커(인터넷)*
 **준비물**: UNO Q 1대 + VL53L8CX 1개(배선은 3장), 보드가 **인터넷이 되는 와이파이**에 연결된 상태, 노트북 Chrome.
 
 1. **보드에 코드 넣기** (택1)
-   - 보드에 git이 있으면(UNO Q에는 기본 설치): 저장소 루트가 곧 앱 폴더이므로 폴더 이름을 `tof-duo`로 해서 받는다.
+   - 보드에 git이 있으면(UNO Q에는 기본 설치): 저장소를 받고, **`app.yaml`이 들어 있는 폴더**를 `~/ArduinoApps/tof-duo`로 복사한다.
      ```bash
-     cd ~/ArduinoApps && git clone <저장소 주소> tof-duo
+     cd ~ && git clone https://github.com/jinse12/tof-duo.git tof-duo-repo
+     cp -r tof-duo-repo/tof-duo ~/ArduinoApps/tof-duo     # 저장소 안의 tof-duo/ 폴더가 앱 폴더
      ```
-   - 또는 저장소를 zip으로 받아 `arduino-app-cli app import <zip 경로>` (또는 App Lab의 가져오기).
+     (저장소 루트에 바로 `app.yaml`이 보이면 `cp -r tof-duo-repo ~/ArduinoApps/tof-duo` 로 복사)
+   - 또는 앱 폴더를 zip으로 만들어 `arduino-app-cli app import <zip 경로>` (또는 App Lab의 가져오기).
 2. **시작**
    ```bash
    arduino-app-cli app start ~/ArduinoApps/tof-duo
