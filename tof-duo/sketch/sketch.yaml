@@ -1,0 +1,7 @@
+profiles:
+  default:
+    platforms:
+      - platform: arduino:zephyr
+    libraries:
+      - STM32duino VL53L8CX (2.1.0)
+default_profile: default

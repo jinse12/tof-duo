@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ToF Hub</title>
+<style>
+:root{--bg:#0b0e14;--panel:#131824;--line:#222a3a;--fg:#e6e9f0;--mute:#8892a6;--ok:#3ddc97;--bad:#ff5d6c;--accent:#6aa8ff}
+*{box-sizing:border-box}
+body{max-width:1800px;margin-left:auto;margin-right:auto}
+body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,"Noto Sans KR",sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:22px} h1 span{font-size:13px;color:var(--mute);font-weight:400;margin-left:8px}
+.pill{display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:99px;background:var(--panel);border:1px solid var(--line)}
+.pill i{width:9px;height:9px;border-radius:50%;background:var(--bad)} .pill.on i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.setup{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}
+input,select{background:var(--panel);border:1px solid var(--line);color:var(--fg);padding:8px 10px;border-radius:8px}
+#url{min-width:260px;flex:1}
+button{background:var(--accent);color:#06101f;border:0;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer}
+button.alt{background:var(--panel);color:var(--fg);border:1px solid var(--line)}
+label{color:var(--mute);font-size:13px}
+.note{color:var(--bad);min-height:1.2em;font-size:13px}
+.alert{padding:10px 14px;border-radius:10px;background:#3a1520;border:1px solid var(--bad);color:#ffd5da;margin:8px 0;text-align:center;font-weight:600}
+.hidden{display:none}
+#grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:8px}
+figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+figcaption{display:flex;justify-content:space-between;margin-bottom:8px;color:var(--mute)}
+figcaption b{color:var(--fg)} figcaption em{font-style:normal;color:var(--fg);font-variant-numeric:tabular-nums}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:6px} .dot.on{background:var(--ok)}
+figcaption small{color:var(--mute);margin-left:6px;font-size:12px}
+canvas.hm{width:100%;max-width:max(240px,min(480px,32vw,52vh));aspect-ratio:1;border-radius:8px;background:#000;display:block;margin:0 auto}
+.row{display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-top:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+.card h2{margin:0 0 8px;font-size:14px;color:var(--mute);font-weight:600}
+.rank .r{display:flex;align-items:center;gap:8px;margin:6px 0}
+.rank .bar{flex:1;height:8px;background:#0b0e14;border-radius:99px;overflow:hidden}
+.rank .bar i{display:block;height:100%}
+.rank span.n{width:72px;white-space:nowrap} .rank span.v{width:70px;text-align:right;font-variant-numeric:tabular-nums;color:var(--mute)}
+#chart{width:100%;aspect-ratio:900/200;height:auto;display:block}
+#view3d{height:clamp(360px,62vh,780px);border-radius:8px;background:#05070b;position:relative}
+#view3d canvas{width:100%!important;height:100%!important;display:block}
+.legend{display:flex;align-items:center;gap:10px;margin-top:14px;color:var(--mute);font-size:12px}
+.legend .bar{flex:1;height:8px;border-radius:99px;background:linear-gradient(90deg,hsl(0,85%,50%),hsl(60,85%,50%),hsl(120,85%,45%),hsl(210,85%,50%))}
+#radar{width:100%;max-width:min(1100px,calc(58vh * 900 / 520));aspect-ratio:900/520;height:auto;margin:0 auto;border-radius:8px;background:#05070b;display:block}
+#radar-ctl{margin:0 0 8px} #radar-ctl input[type=number]{width:64px;padding:6px}
+#rinfo{color:var(--mute);font-size:13px;margin-top:6px}
+.tabs{display:flex;gap:8px;margin:14px 0 0;flex-wrap:wrap}
+.tabs button{background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:10px 18px;border-radius:10px;font-size:15px}
+.tabs button.on{background:var(--accent);color:#06101f;border-color:var(--accent)}
+/* radar tab on a wide screen: radar left (big), the three heatmaps stacked on the right -> everything fits one screen */
+body.radar-mode #stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,320px);gap:14px;align-items:start}
+body.radar-mode #radar-card{grid-column:1;grid-row:1;margin-top:0!important}
+body.radar-mode #grid{grid-column:2;grid-row:1;grid-template-columns:1fr;margin-top:0;gap:10px}
+body.radar-mode canvas.hm{max-width:min(300px,19vh)}
+body.radar-mode figure{padding:8px}
+@media(max-width:1000px){body.radar-mode #stage{display:block}body.radar-mode #grid{margin-top:8px}body.radar-mode canvas.hm{max-width:max(240px,min(480px,32vw,52vh))}}
+@media(max-width:760px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ToF Hub <span>virtual shared depth space</span></h1>
+  <div id="clock" title="영상과 화면을 맞출 때 쓰는 현재 시각" style="font:600 18px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.5px"></div>
+  <div id="link" class="pill"><i></i><b id="link-text">미연결</b></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-m="2d" class="on">2D 히트맵</button>
+  <button data-m="3d">3D 포인트 클라우드</button>
+  <button data-m="radar">📡 레이더</button>
+</nav>
+<section class="setup">
+  <input id="team" placeholder="팀 코드 (보드와 동일)" />
+  <input id="url" value="ws://broker.hivemq.com:8000/mqtt" title="브로커 WebSocket 주소. https 페이지에서는 wss://broker.hivemq.com:8884/mqtt" />
+  <button id="connect">연결</button>
+  <button id="hreset" class="alt" title="받은 프레임, 통계, 추적, 배경을 모두 지움">프레임 초기화</button>
+  <label>보기 <select id="mode"><option value="2d">2D 히트맵</option><option value="3d">3D 포인트 클라우드</option><option value="radar">레이더 (3센서 파노라마)</option></select></label>
+  <label>히트맵 <select id="hview"><option value="matrix">8x8 칸</option><option value="smooth">8x8 부드럽게</option></select></label>
+  <label><input type="checkbox" id="nums" checked /> mm 숫자</label>
+  <label title="센서별 평균 움직임(프레임 간 변화, mm)이 이 값을 1초 이상 넘으면 경보">움직임 경보 <input type="number" id="mthr" value="40" min="5" max="500" step="5" style="width:64px;padding:6px"> mm <input type="checkbox" id="beep" title="경보음 (체크하는 순간부터 소리가 납니다)"> 소리</label>
+  <label title="한 프레임만 튀는 값을 최근 3프레임 중간값으로 보정 (이웃 존이 같이 움직이면 실제 움직임으로 인정)"><input type="checkbox" id="despike" checked /> 튐 보정</label>
+  <label title="측정 안 된 칸을 주변 값으로 추정해 흐리게 채움"><input type="checkbox" id="fill" checked /> 빈칸 채움</label>
+</section>
+<div id="msg" class="note"></div>
+<div id="alert" class="alert hidden"></div>
+<div id="move" class="alert hidden" style="background:#3a2a10;border-color:#ffb454;color:#ffe3b0"></div>
+
+<div id="stage">
+<div id="grid"></div>
+<div id="v3" class="card hidden" style="margin-top:8px"><h2>3D 포인트 클라우드 (센서별 색, 마우스로 회전/확대)</h2><div id="view3d"></div></div>
+
+<div id="radar-card" class="card hidden" style="margin-top:8px"><h2>3-센서 파노라마 레이더 (위에서 본 평면도, 센서 = 아래 중앙)</h2>
+  <div class="setup" id="radar-ctl">
+    <label>모드 <select id="rmode"><option value="fan">부채꼴 (넓게)</option><option value="stack">겹치기 (median-of-3)</option></select></label>
+    <span id="yaws"></span>
+    <label><input type="checkbox" id="rflip" /> 좌우 반전</label>
+    <label><input type="checkbox" id="rdwell" /> 체류 히트맵</label>
+    <button id="rbg">배경 학습 (3초, 빈 공간에서)</button><button class="alt" id="rreset">초기화</button>
+  </div>
+  <canvas id="radar" width="900" height="520"></canvas><div id="rinfo"></div>
+</div>
+</div>
+<div class="row">
+  <div class="card rank"><h2>실시간 랭킹</h2><div id="rank-near"></div><h2 style="margin-top:14px">활동량 (평균 변화 mm/프레임)</h2><div id="rank-act"></div><h2 style="margin-top:14px">마지막 큰 움직임 구간</h2><div id="rank-seg" style="font-size:13px;color:var(--mute)">아직 없음</div></div>
+  <div class="card"><h2>최소 거리 추이 (최근 2분)</h2><canvas id="chart" width="900" height="200"></canvas></div>
+</div>
+<div class="legend"><span>가까움</span><div class="bar"></div><span>멀음 (3 m) · 흐린 칸 = 주변 값으로 추정</span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ====== 팀 구성: 토픽 이름(영문) -> 표시 이름. 필요하면 여기만 고치세요 ======
+const LABELS = { tof1: '진세', tof2: '혜연', tof3: '연우' };
+const COLORS = ['#6aa8ff', '#ffb454', '#3ddc97', '#d98cff', '#ff7a90'];
+const N = 8, MAX_MM = 3000, ALERT_MM = 400, TIMEOUT = 3000, HIST_MS = 120000, FOV_DEG = 45;
+const $ = (id) => document.getElementById(id);
+
+const S = {};          // id -> sensor state
+let order = [];        // stable display order
+function sensor(id) {
+  if (!S[id]) {
+    S[id] = { id, zones: null, last: 0, seq: null, lost: 0, count: 0, times: [], hist: [], act: 0, declared: '' };
+    order = Object.keys(S).sort(); buildPanels();
+  }
+  return S[id];
+}
+const label = (id) => (S[id] && S[id].label) || LABELS[id] || id;   // name sent by the board > LABELS fallback > board id
+const colorOf = (id) => COLORS[order.indexOf(id) % COLORS.length];
+const alive = (s) => s.last && Date.now() - s.last < TIMEOUT;
+const minOf = (z) => { const v = (z || []).filter((d) => d > 0); return v.length ? Math.min(...v) : 0; };
+
+// ---------- color ----------
+function hsl2rgb(h, s, l) { s /= 100; l /= 100; const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))); return [f(0) * 255, f(8) * 255, f(4) * 255]; }
+function colorFor(d) { if (!(d > 0)) return [18, 22, 32]; const t = Math.min(1, d / MAX_MM); return hsl2rgb(t * 210, 85, 50 - 5 * t); }
+
+// ---------- panels ----------
+function buildPanels() {
+  const g = $('grid'); g.innerHTML = '';
+  order.forEach((id) => {
+    const f = document.createElement('figure'); f.id = 'f-' + id;
+    f.innerHTML = `<figcaption><span><i class="dot"></i><b>${label(id)}</b><small></small></span><em>-</em></figcaption><canvas class="hm"></canvas>`;
+    g.append(f);
+  });
+  if (typeof buildRadarControls === 'function') buildRadarControls();
+}
+
+// Fill zones with no reading from valid neighbours (display only). est[i] = true for filled zones.
+function fillGaps(zones) {
+  const out = zones.slice(), est = new Array(64).fill(false);
+  for (let pass = 0; pass < 2; pass++) {
+    const snap = out.slice();
+    for (let i = 0; i < 64; i++) {
+      if (snap[i] > 0) continue;
+      const r = Math.floor(i / 8), c = i % 8, v = [];
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const rr = r + dr, cc = c + dc; if ((!dr && !dc) || rr < 0 || rr > 7 || cc < 0 || cc > 7) continue;
+        if (snap[rr * 8 + cc] > 0) v.push(snap[rr * 8 + cc]);
+      }
+      if (v.length >= 2) { v.sort((a, b) => a - b); out[i] = v.length % 2 ? v[v.length >> 1] : Math.round((v[v.length / 2 - 1] + v[v.length / 2]) / 2); est[i] = true; }   // median: no fake mid-values at near/far edges
+    }
+  }
+  return { out, est };
+}
+// Crisp canvas: backing store = CSS size * devicePixelRatio (never upscaled), capped at 300 CSS px.
+function fitFixed(cv, w, h) {   // canvas drawn in a fixed w x h design space, rendered crisp at any CSS size
+  const dpr = window.devicePixelRatio || 1, px = Math.round((cv.clientWidth || w) * dpr), ph = Math.round(px * h / w);
+  if (cv.width !== px || cv.height !== ph) { cv.width = px; cv.height = ph; }
+  return px / w;
+}
+function fitCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1, css = Math.min(cv.clientWidth || 300, 480), px = Math.round(css * dpr);
+  if (cv.width !== px || cv.height !== px) { cv.width = px; cv.height = px; }
+  return cv.width / 300;   // scale factor for fonts/gaps designed at 300px
+}
+
+// Smooth view: true bilinear upsampling 8x8 -> 64x64 (colour computed per pixel), then scaled to the canvas.
+const big = document.createElement('canvas'); big.width = 64; big.height = 64;
+const bctx = big.getContext('2d');
+function drawSmooth(ctx, cv, out) {
+  const img = bctx.createImageData(64, 64);
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+    const fx = Math.min(7, Math.max(0, (x + 0.5) / 8 - 0.5)), fy = Math.min(7, Math.max(0, (y + 0.5) / 8 - 0.5));
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(7, x0 + 1), y1 = Math.min(7, y0 + 1), tx = fx - x0, ty = fy - y0;
+    const v = (xx, yy) => { const d = out[yy * 8 + xx]; return d > 0 ? d : MAX_MM; };
+    const d = (v(x0, y0) * (1 - tx) + v(x1, y0) * tx) * (1 - ty) + (v(x0, y1) * (1 - tx) + v(x1, y1) * tx) * ty;
+    const [r, g, b] = colorFor(d); img.data.set([r, g, b, 255], (y * 64 + x) * 4);
+  }
+  bctx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(big, 0, 0, cv.width, cv.height);
+}
+function drawPanel(s) {
+  const f = $('f-' + s.id); if (!f || !s.zones) return;
+  const cv = f.querySelector('canvas'), k = fitCanvas(cv), ctx = cv.getContext('2d'), w = cv.width / N, gap = 3 * k;
+  const fs = (base) => base * k, showNums = $('nums').checked && (cv.clientWidth || 300) / N >= 30;   // numbers only when the cell is wide enough to read
+  const { out, est } = $('fill').checked ? fillGaps(s.zones) : { out: s.zones, est: new Array(64).fill(false) };
+  ctx.clearRect(0, 0, cv.width, cv.height); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if ($('hview').value === 'smooth') {
+    drawSmooth(ctx, cv, out);
+    if (showNums) { ctx.font = `${fs(10)}px system-ui`; ctx.fillStyle = 'rgba(255,255,255,.85)'; for (let i = 0; i < 64; i++) if (out[i] > 0 && !est[i]) ctx.fillText(out[i], (i % N) * w + w / 2, Math.floor(i / N) * w + w / 2); }
+    return;
+  }
+  for (let i = 0; i < 64; i++) {
+    const x = (i % N) * w + gap / 2, y = Math.floor(i / N) * w + gap / 2, sz = w - gap, [r, g, b] = colorFor(out[i]);
+    ctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${est[i] ? 0.55 : 1})`; ctx.beginPath(); ctx.roundRect(x, y, sz, sz, 5 * k); ctx.fill();
+    if (showNums) { ctx.font = `${est[i] ? 'italic 500' : '600'} ${fs(11)}px system-ui`; ctx.fillStyle = est[i] ? 'rgba(255,255,255,.8)' : 'rgba(0,0,0,.75)'; ctx.fillText(out[i] > 0 ? out[i] : '-', x + sz / 2, y + sz / 2); }
+  }
+}
+function updateChrome() {
+  order.forEach((id) => {
+    const s = S[id], f = $('f-' + id); if (!f) return;
+    f.querySelector('b').textContent = label(id);
+    f.querySelector('.dot').classList.toggle('on', !!alive(s));
+    const tot = s.count + s.lost, fps = s.times.filter((t) => Date.now() - t < 2000).length / 2;
+    const lat = s.lat && s.lat.length ? [...s.lat].sort((a, b) => a - b)[s.lat.length >> 1] : null;
+    f.querySelector('small').textContent = alive(s) ? `${fps.toFixed(0)}Hz · 손실 ${tot ? (100 * s.lost / tot).toFixed(1) : 0}%` + (lat !== null ? ` · 지연 ≈${lat}ms` : '') : '응답 없음';
+    f.querySelector('em').textContent = s.zones && alive(s) ? (minOf(s.zones) || '-') + ' mm' : '-';
+  });
+  // alert: 2+ sensors closer than ALERT_MM at the same time
+  const close = order.filter((id) => alive(S[id]) && minOf(S[id].zones) && minOf(S[id].zones) < ALERT_MM);
+  $('alert').classList.toggle('hidden', close.length < 2);
+  if (close.length >= 2) $('alert').textContent = '동시 접근 · ' + close.map((id) => `${label(id)} ${minOf(S[id].zones)}mm`).join(' / ');
+  // last big-motion segment per sensor + spike counter
+  $('rank-seg').innerHTML = order.map((id) => { const g = S[id].seg, l = S[id].lastSeg, fx = S[id].fixed || 0;
+    const t = g && g.active ? `<b style="color:var(--bad)">진행 중</b> ${fmtT(g.start)}~ (최대 ${g.peak.toFixed(0)}mm)` : l ? `${fmtT(l.start)}~${fmtT(l.end)} · ${((l.end - l.start) / 1000).toFixed(1)}s · 최대 ${l.peak.toFixed(0)}mm · 보정 ${l.fixed}개` : '없음';
+    return `<div style="margin:3px 0"><span style="color:${colorOf(id)}">●</span> ${label(id)}: ${t} <span style="opacity:.6">(누적 보정 ${fx})</span></div>`; }).join('') || '아직 없음';
+  // rankings
+  const live = order.filter((id) => alive(S[id]) && S[id].zones);
+  const near = live.map((id) => [id, minOf(S[id].zones)]).filter(([, m]) => m).sort((a, b) => a[1] - b[1]);
+  $('rank-near').innerHTML = near.map(([id, m], i) => rankRow(id, (i === 0 ? '🥇 ' : '') + label(id), m + ' mm', 1 - Math.min(1, m / MAX_MM))).join('') || '<small style="color:var(--mute)">데이터 없음</small>';
+  const act = live.map((id) => [id, S[id].act]).sort((a, b) => b[1] - a[1]), mx = Math.max(1, ...act.map((a) => a[1]));
+  $('rank-act').innerHTML = act.map(([id, a], i) => rankRow(id, (i === 0 && a > moveThr() ? '🔥 ' : '') + label(id), a.toFixed(0), a / mx)).join('') || '<small style="color:var(--mute)">데이터 없음</small>';
+}
+const rankRow = (id, name, val, frac) => `<div class="r"><span class="n">${name}</span><span class="bar"><i style="width:${(frac * 100).toFixed(0)}%;background:${colorOf(id)}"></i></span><span class="v">${val}</span></div>`;
+
+// ---------- chart ----------
+function drawChart() {
+  const cv = $('chart'), ctx = cv.getContext('2d'), W = 900, H = 200, now = Date.now(), pad = 28, kk = fitFixed(cv, 900, 200);
+  ctx.setTransform(kk, 0, 0, kk, 0, 0); ctx.clearRect(0, 0, W, H); ctx.strokeStyle = '#222a3a'; ctx.fillStyle = '#8892a6'; ctx.font = '11px system-ui'; ctx.lineWidth = 1;
+  for (let m = 0; m <= MAX_MM; m += 1000) { const y = H - pad - (m / MAX_MM) * (H - pad - 8); ctx.beginPath(); ctx.moveTo(pad + 20, y); ctx.lineTo(W, y); ctx.stroke(); ctx.fillText(m, 2, y + 3); }
+  order.forEach((id) => {   // shade the last (and any active) big-motion segment
+    const g = S[id].seg, l = S[id].lastSeg, seg = g && g.active ? { start: g.start, end: now } : l;
+    if (!seg) return; const x0 = pad + 20 + (1 - Math.min(1, (now - seg.start) / HIST_MS)) * (W - pad - 20), x1 = pad + 20 + (1 - Math.max(0, (now - seg.end) / HIST_MS)) * (W - pad - 20);
+    ctx.fillStyle = colorOf(id) + '22'; ctx.fillRect(x0, 8, Math.max(2, x1 - x0), H - pad - 8);
+  });
+  order.forEach((id) => {
+    const h = S[id].hist; if (h.length < 2) return;
+    ctx.strokeStyle = colorOf(id); ctx.lineWidth = 2; ctx.beginPath(); let pen = false;
+    h.forEach(([t, v]) => {
+      const x = pad + 20 + (1 - (now - t) / HIST_MS) * (W - pad - 20), y = H - pad - (Math.min(v, MAX_MM) / MAX_MM) * (H - pad - 8);
+      if (!v) { pen = false; return; } if (!pen) { ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y);
+    }); ctx.stroke();
+  });
+  ctx.font = '12px system-ui'; let lx = pad + 24; order.forEach((id) => { ctx.fillStyle = colorOf(id); ctx.fillRect(lx, H - 14, 10, 10); ctx.fillStyle = '#e6e9f0'; ctx.fillText(label(id), lx + 14, H - 5); lx += 70; });
+}
+
+// ---------- 3D point cloud ----------
+let three = null;
+function init3D() {
+  if (three || typeof THREE === 'undefined') return;
+  try { init3Dunsafe(); } catch (e) { three = null; $('view3d').innerHTML = '<p style="padding:16px;color:#ff5d6c">3D를 사용할 수 없습니다 (WebGL 필요): ' + e.message + '</p>'; }
+}
+function init3Dunsafe() {
+  const box = $('view3d'), scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(55, box.clientWidth / box.clientHeight, 10, 30000);
+  const rend = new THREE.WebGLRenderer({ antialias: true }); rend.setSize(box.clientWidth, box.clientHeight); box.append(rend.domElement);
+  cam.position.set(0, 1500, 3200); const ctl = new THREE.OrbitControls(cam, rend.domElement); ctl.target.set(0, 0, -1200); ctl.update();
+  scene.add(new THREE.GridHelper(8000, 16, 0x222a3a, 0x151b27));
+  three = { scene, cam, rend, ctl, pts: {} };
+  (function loop() { requestAnimationFrame(loop); if ($('mode').value === '3d') { update3D(); rend.render(scene, cam); } })();
+  window.addEventListener('resize', () => { cam.aspect = box.clientWidth / box.clientHeight; cam.updateProjectionMatrix(); rend.setSize(box.clientWidth, box.clientHeight); });
+}
+function update3D() {
+  order.forEach((id, k) => {
+    let p = three.pts[id];
+    if (!p) {
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(192), 3));
+      p = three.pts[id] = new THREE.Points(geo, new THREE.PointsMaterial({ size: 70, color: colorOf(id), sizeAttenuation: true }));
+      const mk = new THREE.Mesh(new THREE.SphereGeometry(40), new THREE.MeshBasicMaterial({ color: colorOf(id) })); mk.position.set((k - (order.length - 1) / 2) * 1800, 0, 0); three.scene.add(mk);
+      p.userData.ox = mk.position.x; three.scene.add(p);
+    }
+    const s = S[id], pos = p.geometry.attributes.position, t = Math.tan((FOV_DEG / N) * Math.PI / 180);
+    for (let i = 0; i < 64; i++) {
+      const d = s.zones && alive(s) ? s.zones[i] : 0, cx = (i % N) - 3.5, cy = Math.floor(i / N) - 3.5;
+      if (d > 0) pos.setXYZ(i, p.userData.ox + d * cx * t, -d * cy * t, -d); else pos.setXYZ(i, p.userData.ox, 0, 0);
+    }
+    pos.needsUpdate = true;
+  });
+}
+
+// ---------- radar (panorama of the 3 sensors) ----------
+const R = { yaw: {}, mode: 'fan', flip: false, bg: {}, learn: null, tracks: [], nextId: 1, passed: 0, points: [], dwell: new Float32Array(60 * 36) };
+const DEF_YAW = [-40, 0, 40], PPM = 150, OX = 450, OY = 500, RMAX = 3200;
+try { const sv = JSON.parse(localStorage.getItem('tofhub-radar') || '{}'); Object.assign(R, { yaw: sv.yaw || {}, mode: sv.mode || 'fan', flip: !!sv.flip }); } catch (e) {}
+const saveRadar = () => { try { localStorage.setItem('tofhub-radar', JSON.stringify({ yaw: R.yaw, mode: R.mode, flip: R.flip })); } catch (e) {} };
+const yawOf = (id) => (R.yaw[id] !== undefined ? R.yaw[id] : (DEF_YAW[order.indexOf(id)] ?? 0));
+
+function buildRadarControls() {
+  const box = $('yaws'); if (!box) return; box.innerHTML = '';
+  order.forEach((id) => {
+    const l = document.createElement('label'); l.innerHTML = `${label(id)} 각도 <input type="number" step="1" value="${yawOf(id)}"> °`;
+    l.querySelector('input').onchange = (e) => { R.yaw[id] = Number(e.target.value) || 0; saveRadar(); };
+    box.append(l);
+  });
+}
+function fuse(frames) {   // per-zone median of the valid readings (mean when only two)
+  const out = new Array(64).fill(0);
+  for (let i = 0; i < 64; i++) {
+    const v = frames.map((f) => f[i]).filter((d) => d > 0).sort((a, b) => a - b);
+    out[i] = !v.length ? 0 : v.length % 2 ? v[v.length >> 1] : Math.round((v[v.length / 2 - 1] + v[v.length / 2]) / 2);
+  }
+  return out;
+}
+function startLearn() { R.learn = { until: Date.now() + 3000, samples: {} }; }
+function median(a) { a = a.filter((d) => d > 0).sort((x, y) => x - y); return a.length ? a[a.length >> 1] : 0; }
+function finishLearn() {
+  const bg = {};
+  Object.entries(R.learn.samples).forEach(([k, frames]) => { bg[k] = Array.from({ length: 64 }, (_, i) => median(frames.map((f) => f[i]))); });
+  R.bg = bg; R.learn = null; R.tracks = []; R.passed = 0; R.dwell.fill(0);
+}
+function bgFor(key) { return R.bg[key]; }
+
+function fgPoints(zones, bg, yaw, id) {
+  const pts = [];
+  for (let c = 0; c < N; c++) {
+    const ds = [];
+    for (let r = 0; r < N; r++) { const i = r * N + c, d = zones[i], b = bg ? bg[i] : 0; if (d > 0 && d < (b > 0 ? b : MAX_MM) - 200) ds.push(d); }
+    if (ds.length >= 2) {
+      ds.sort((a, b) => a - b); const m = ds[ds.length >> 1], cc = R.flip ? N - 1 - c : c;
+      const a = (yaw + (cc - 3.5) * FOV_DEG / N) * Math.PI / 180; pts.push({ x: m * Math.sin(a), y: m * Math.cos(a), id });
+    }
+  }
+  return pts;
+}
+function cluster(pts) {
+  const par = pts.map((_, i) => i), f = (i) => (par[i] === i ? i : (par[i] = f(par[i])));
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) if (Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) < 400) par[f(i)] = f(j);
+  const g = {}; pts.forEach((p, i) => (g[f(i)] = g[f(i)] || []).push(p));
+  return Object.values(g).filter((a) => a.length >= 2).map((a) => ({ x: a.reduce((s, p) => s + p.x, 0) / a.length, y: a.reduce((s, p) => s + p.y, 0) / a.length, n: a.length, src: [...new Set(a.map((p) => p.id))] }));
+}
+function track(blobs, now) {
+  const used = new Set();
+  R.tracks.forEach((t) => {
+    let best = -1, bd = 700;
+    blobs.forEach((b, i) => { if (used.has(i)) return; const d = Math.hypot(b.x - t.x, b.y - t.y); if (d < bd) { bd = d; best = i; } });
+    if (best >= 0) { const b = blobs[best]; used.add(best); t.x = t.x * 0.5 + b.x * 0.5; t.y = t.y * 0.5 + b.y * 0.5; t.seen = now; t.src = b.src; t.trail.push([now, t.x, t.y]); }
+  });
+  blobs.forEach((b, i) => { if (!used.has(i)) R.tracks.push({ id: R.nextId++, x: b.x, y: b.y, born: now, seen: now, src: b.src, trail: [[now, b.x, b.y]], counted: false }); });
+  R.tracks = R.tracks.filter((t) => now - t.seen < 3000);
+  R.tracks.forEach((t) => { t.trail = t.trail.filter((p) => now - p[0] < 3000); if (!t.counted && t.seen - t.born > 1000) { t.counted = true; R.passed++; } });
+}
+function radarTick() {
+  if ($('mode').value !== 'radar') return;
+  const now = Date.now(), live = order.filter((id) => alive(S[id]) && S[id].zones);
+  R.mode = $('rmode').value; R.flip = $('rflip').checked;
+  const fz = live.length ? fuse(live.map((id) => S[id].zones)) : null;
+  const ff = $('f-fused');
+  if (R.mode === 'stack' && fz) {
+    let f = ff; if (!f) { f = document.createElement('figure'); f.id = 'f-fused'; f.innerHTML = '<figcaption><span><b>합성 (median-of-3)</b></span><em>-</em></figcaption><canvas class="hm"></canvas>'; $('grid').append(f); }
+    drawPanel({ id: 'fused', zones: fz }); f.querySelector('em').textContent = (minOf(fz) || '-') + ' mm';
+  } else if (ff) ff.remove();
+  if (R.learn) {
+    live.forEach((id) => (R.learn.samples[id] = R.learn.samples[id] || []).push(S[id].zones.slice()));
+    if (fz) (R.learn.samples.fused = R.learn.samples.fused || []).push(fz);
+    if (now > R.learn.until) finishLearn();
+  }
+  const fusedBg = () => R.bg.fused || (Object.keys(R.bg).length ? fuse(Object.entries(R.bg).filter(([k]) => k !== 'fused').map(([, v]) => v)) : null);
+  let pts = [];
+  if (R.mode === 'stack') { if (fz) pts = fgPoints(fz, fusedBg(), 0, 'fused'); }
+  else live.forEach((id) => { pts = pts.concat(fgPoints(S[id].zones, R.bg[id], yawOf(id), id)); });
+  R.points = pts;
+  if (Object.keys(R.bg).length) track(cluster(pts), now);
+  R.tracks.forEach((t) => { if (now - t.seen < 300) { const cx = Math.floor((t.x / 1000 + 3) / 0.1), cy = Math.floor(t.y / 1000 / 0.1); if (cx >= 0 && cx < 60 && cy >= 0 && cy < 36) R.dwell[cy * 60 + cx] += 1; } });
+  drawRadar(live, now);
+}
+function drawRadar(live, now) {
+  const cv = $('radar'), ctx = cv.getContext('2d'), kk = fitFixed(cv, 900, 520); ctx.setTransform(kk, 0, 0, kk, 0, 0); ctx.clearRect(0, 0, 900, 520);
+  if ($('rdwell').checked) for (let cy = 0; cy < 36; cy++) for (let cx = 0; cx < 60; cx++) { const v = R.dwell[cy * 60 + cx]; if (v > 0) { ctx.fillStyle = `rgba(255,140,60,${Math.min(0.75, v / 40)})`; ctx.fillRect(OX + (cx - 30) * 15, OY - (cy + 1) * 15, 15, 15); } }
+  // sensor wedges
+  const wedges = R.mode === 'stack' ? [['fused', 0, '#8892a6', true]] : order.map((id) => [id, yawOf(id), colorOf(id), alive(S[id])]);
+  wedges.forEach(([id, yaw, col, ok]) => {
+    ctx.beginPath(); ctx.moveTo(OX, OY); ctx.arc(OX, OY, RMAX * PPM / 1000, (-90 + yaw - FOV_DEG / 2) * Math.PI / 180, (-90 + yaw + FOV_DEG / 2) * Math.PI / 180); ctx.closePath();
+    ctx.fillStyle = col + (ok ? '14' : '06'); ctx.fill(); ctx.strokeStyle = col + (ok ? '66' : '22'); ctx.lineWidth = 1; ctx.stroke();
+  });
+  ctx.strokeStyle = '#222a3a'; ctx.fillStyle = '#8892a6'; ctx.font = '11px system-ui';
+  [1, 2, 3].forEach((m) => { ctx.beginPath(); ctx.arc(OX, OY, m * PPM, Math.PI, 2 * Math.PI); ctx.stroke(); ctx.fillText(m + ' m', OX + 4, OY - m * PPM + 12); });
+  R.points.forEach((p) => { ctx.fillStyle = (p.id === 'fused' ? '#e6e9f0' : colorOf(p.id)) + 'aa'; ctx.beginPath(); ctx.arc(OX + p.x * PPM / 1000, OY - p.y * PPM / 1000, 3, 0, 7); ctx.fill(); });
+  R.tracks.forEach((t) => {
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2; ctx.beginPath();
+    t.trail.forEach((q, i) => { const px = OX + q[1] * PPM / 1000, py = OY - q[2] * PPM / 1000; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.stroke();
+    const px = OX + t.x * PPM / 1000, py = OY - t.y * PPM / 1000, live2 = now - t.seen < 300;
+    ctx.fillStyle = live2 ? '#ffffff' : '#ffffff55'; ctx.beginPath(); ctx.arc(px, py, 11, 0, 7); ctx.fill();
+    ctx.fillStyle = '#05070b'; ctx.font = '600 12px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t.id, px, py + 1);
+    ctx.fillStyle = '#e6e9f0'; ctx.font = '11px system-ui'; ctx.fillText((Math.hypot(t.x, t.y) / 1000).toFixed(1) + 'm', px, py - 20);
+  });
+  ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  const cur = R.tracks.filter((t) => now - t.seen < 500).length;
+  $('rinfo').textContent = `현재 ${cur}명 · 지나간 사람 ${R.passed}명 · ` + (R.learn ? `배경 학습 중 ${Math.max(0, ((R.learn.until - now) / 1000)).toFixed(1)}s (빈 공간 유지)` : Object.keys(R.bg).length ? '배경 학습됨' : '배경 미학습: "배경 학습"을 먼저 누르세요');
+}
+window.__radar = R;
+$('rbg').onclick = startLearn;
+$('rreset').onclick = () => { R.bg = {}; R.tracks = []; R.passed = 0; R.dwell.fill(0); };
+$('rmode').value = R.mode; $('rflip').checked = R.flip; $('rmode').onchange = () => { R.mode = $('rmode').value; saveRadar(); }; $('rflip').onchange = () => { R.flip = $('rflip').checked; saveRadar(); };
+setInterval(radarTick, 100);
+
+// ---------- spike correction + big-motion segments ----------
+const BIG_MM = 60, CALM_MS = 1000, SPIKE_MM = 120;
+// Temporal median-of-3 per zone. A single-frame jump is replaced by the median of the last 3 readings,
+// unless >=2 neighbouring zones jumped the same way in this frame (coherent = a real object moving).
+function despike(s, z) {
+  const buf = s.buf || (s.buf = []), out = z.slice();
+  if (buf.length >= 2) {
+    const [a0, b0] = buf;
+    for (let i = 0; i < 64; i++) {
+      const a = a0[i], b = b0[i], c = z[i];
+      if (c <= 0) { const prev = b > 0 ? b : a; if (prev > 0) out[i] = prev; continue; }   // short dropout: hold last valid
+      if (!(a > 0 && b > 0)) continue;
+      const med = [a, b, c].sort((x, y) => x - y)[1];
+      if (Math.abs(c - med) <= SPIKE_MM) continue;
+      let coh = 0; const r = (i / 8) | 0, col = i % 8;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const rr = r + dr, cc = col + dc; if ((!dr && !dc) || rr < 0 || rr > 7 || cc < 0 || cc > 7) continue;
+        const n = rr * 8 + cc, nb = z[n], pb = b0[n];
+        if (nb > 0 && pb > 0 && Math.abs(nb - pb) > SPIKE_MM && Math.sign(nb - pb) === Math.sign(c - b)) coh++;
+      }
+      if (coh < 2) { out[i] = med; s.fixed = (s.fixed || 0) + 1; }
+    }
+  }
+  buf.push(z); if (buf.length > 2) buf.shift();
+  return out;
+}
+// A "big motion segment" starts when the mean frame-to-frame change exceeds BIG_MM and ends after CALM_MS of calm.
+function trackSegment(s, m, now) {
+  const g = s.seg || (s.seg = { active: false });
+  if (m > BIG_MM) {
+    if (!g.active) { g.active = true; g.start = now; g.peak = 0; g.fixed0 = s.fixed || 0; }
+    g.lastBig = now; g.peak = Math.max(g.peak, m);
+  } else if (g.active && now - g.lastBig > CALM_MS) {
+    g.active = false; s.lastSeg = { start: g.start, end: g.lastBig, peak: g.peak, fixed: (s.fixed || 0) - g.fixed0 };
+  }
+}
+const pad2 = (n) => String(n).padStart(2, '0');
+const moveThr = () => Math.max(5, Number($('mthr').value) || 40);
+let audio = null;
+function beep() {
+  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = 880; g.gain.value = 0.08;
+    o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.25); } catch (e) {}
+}
+// hysteresis: becomes hot above the threshold, cools down below 60 % of it
+function updateMoveAlert() {
+  const thr = moveThr(), hot = [];
+  order.forEach((id) => {
+    const s = S[id], f = $('f-' + id), was = !!s.hot;
+    if (alive(s) && s.act > thr) s.hot = true; else if (!alive(s) || s.act < thr * 0.6) s.hot = false;
+    if (s.hot) hot.push(id);
+    if (s.hot && !was && $('beep').checked) beep();
+    if (f) f.style.borderColor = s.hot ? '#ffb454' : '';
+  });
+  $('move').classList.toggle('hidden', !hot.length);
+  if (hot.length) $('move').textContent = '⚠ 움직임 과다 · ' + hot.map((id) => `${label(id)} ${S[id].act.toFixed(0)}mm`).join(' / ');
+}
+const fmtT = (t) => { const d = new Date(t); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; };
+
+// ---------- MQTT ----------
+let client = null;
+function connect() {
+  const team = $('team').value.trim(), url = $('url').value.trim();
+  if (!/^[A-Za-z0-9_-]+$/.test(team)) { $('msg').textContent = '팀 코드는 영문/숫자/_/- 만 가능합니다.'; return; }
+  $('msg').textContent = '';
+  try { localStorage.setItem('tofhub', JSON.stringify({ team, url })); } catch (e) {}
+  if (client) client.end(true);
+  Object.keys(S).forEach((k) => delete S[k]); order = []; buildPanels();
+  client = mqtt.connect(url, { clientId: 'tofhub-' + Math.random().toString(16).slice(2, 10), reconnectPeriod: 2000, connectTimeout: 8000 });
+  client.on('connect', () => { $('msg').textContent = ''; $('link').classList.add('on'); $('link-text').textContent = '브로커 연결됨 · ' + team;
+    client.subscribe([`tofduo/${team}/+/frame`, `tofduo/${team}/+/status`]); });
+  client.on('reconnect', () => { $('link').classList.remove('on'); $('link-text').textContent = '재연결 중...'; });
+  client.on('close', () => { $('link').classList.remove('on'); });
+  client.on('error', (e) => { $('msg').textContent = '연결 오류: ' + e.message; });
+  client.on('message', (topic, payload) => {
+    const parts = topic.split('/'); if (parts.length !== 4) return; const id = parts[2], kind = parts[3];
+    const s = sensor(id), text = new TextDecoder().decode(payload);
+    if (kind === 'status') { s.declared = text; return; }
+    let d; try { d = JSON.parse(text); } catch (e) { return; }
+    if (!Array.isArray(d.zones) || d.zones.length !== 64) return;
+    if (d.label) s.label = String(d.label).slice(0, 24);
+    if (typeof d.ts === 'number') { const lat = Date.now() - d.ts; if (Math.abs(lat) < 20000) { s.lat = (s.lat || []).concat(lat).slice(-30); } }
+    const now = Date.now();
+    if (typeof d.seq === 'number') { if (s.seq !== null && d.seq > s.seq + 1) s.lost += d.seq - s.seq - 1; s.seq = d.seq; }
+    const zc = $('despike').checked ? despike(s, d.zones) : d.zones;
+    let sum = 0, n = 0;
+    if (s.zones) for (let i = 0; i < 64; i++) if (s.zones[i] > 0 && zc[i] > 0) { sum += Math.abs(s.zones[i] - zc[i]); n++; }
+    const m = n ? sum / n : 0; if (n) s.act = s.act * 0.9 + m * 0.1;   // smoothed mean change per frame, in mm
+    trackSegment(s, m, now);
+    s.zones = zc; s.last = now; s.count++; s.times = s.times.filter((t) => now - t < 2000).concat(now);
+    s.hist.push([now, minOf(zc)]); while (s.hist.length && now - s.hist[0][0] > HIST_MS) s.hist.shift();
+    drawPanel(s);
+  });
+}
+
+$('connect').onclick = connect;
+document.querySelectorAll('#tabs button').forEach((b) => { b.onclick = () => { $('mode').value = b.dataset.m; $('mode').onchange(); }; });
+$('hreset').onclick = () => {   // wipe everything received so far; panels refill when new frames arrive
+  Object.values(S).forEach((s) => { Object.assign(s, { zones: null, last: 0, seq: null, lost: 0, count: 0, times: [], hist: [], act: 0, buf: [], fixed: 0, seg: null, lastSeg: null, lat: [] }); });
+  R.bg = {}; R.tracks = []; R.passed = 0; R.nextId = 1; R.dwell.fill(0); R.points = []; R.learn = null;
+  buildPanels(); const ff = $('f-fused'); if (ff) ff.remove();
+  $('alert').classList.add('hidden'); $('msg').textContent = '프레임을 초기화했습니다.';
+};
+$('hview').onchange = $('nums').onchange = $('fill').onchange = () => order.forEach((id) => drawPanel(S[id]));
+$('mode').onchange = () => { const m = $('mode').value; document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.m === m)); document.body.classList.toggle('radar-mode', m === 'radar'); $('v3').classList.toggle('hidden', m !== '3d'); $('radar-card').classList.toggle('hidden', m !== 'radar'); if (m === '3d') init3D(); };
+setInterval(() => { updateChrome(); updateMoveAlert(); drawChart(); }, 500);
+setInterval(() => { const d = new Date(); $('clock').textContent = fmtT(d) + '.' + String(d.getMilliseconds()).padStart(3, '0'); }, 50);
+try { const sv = JSON.parse(localStorage.getItem('tofhub') || '{}'); if (sv.team) $('team').value = sv.team; if (sv.url) $('url').value = sv.url; } catch (e) {}
+const q = new URLSearchParams(location.search);
+if (q.get('team')) $('team').value = q.get('team');
+if (q.get('despike') === '0') $('despike').checked = false;
+if (q.get('url')) $('url').value = q.get('url');
+if (location.protocol === 'https:') $('url').value = 'wss://broker.hivemq.com:8884/mqtt';
+if (q.get('team')) connect();   // ?team=CODE auto-connects
+if (q.get('bg')) setTimeout(startLearn, Number(q.get('bg')) * 1000);
+if (q.get('mode')) { $('mode').value = q.get('mode'); $('mode').onchange(); }
+</script>
+</body>
+</html>

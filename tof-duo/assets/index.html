@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ToF Duo</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>ToF Team <span>shared depth space over MQTT</span></h1>
+      <a id="hublink" class="pill" href="/hub/index.html?mode=radar" target="_blank" style="color:var(--fg);text-decoration:none;font-weight:600">📡 레이더 / 허브 열기</a>
+      <div id="link" class="pill off"><i></i><b id="link-text">MQTT 미연결</b></div>
+    </header>
+
+    <section class="setup">
+      <input id="team" placeholder="팀 코드 (추측하기 어렵게)" />
+      <input id="name" placeholder="보드 ID (영문/숫자, 예: tof1)" maxlength="24" />
+      <input id="label" placeholder="내 이름 (한글 가능, 화면에 표시)" maxlength="24" />
+      <input id="broker" placeholder="브로커" value="broker.hivemq.com" />
+      <button id="connect">연결</button>
+      <button id="reset" class="alt" title="받은 프레임과 통계를 모두 지움">프레임 초기화</button>
+      <label>보기 <select id="view"><option value="matrix" selected>행렬 (8x8)</option><option value="smooth">부드럽게</option></select></label>
+      <label><input type="checkbox" id="nums" checked /> mm 숫자</label>
+      <label title="측정 안 된 칸을 주변 값으로 추정해 흐리게 채움"><input type="checkbox" id="fill" checked /> 빈칸 채움</label>
+    </section>
+    <div id="msg" class="note"></div>
+
+    <div id="alert" class="alert hidden"></div>
+
+    <main id="grid"></main>
+
+    <section class="stats">
+      <div><small>MQTT</small><b id="s-mqtt">-</b></div>
+      <div><small>보낸 프레임</small><b id="s-tx">-</b></div>
+      <div><small>접속 팀원</small><b id="s-peers">-</b></div>
+      <div><small>팀 코드</small><b id="s-team">-</b></div>
+    </section>
+
+    <div class="legend"><span>가까움</span><div class="bar"></div><span>멀음 (3 m) · 흐린 칸 = 주변 값으로 추정</span></div>
+
+    <script src="libs/socket.io.min.js"></script>
+    <script src="libs/arduino.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
